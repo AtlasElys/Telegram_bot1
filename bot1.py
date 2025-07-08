@@ -1,8 +1,16 @@
-from telegram.ext import ApplicationBuilder, Application
-from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
-import logging
 import os
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ConversationHandler,  # Этот импорт отсутствовал!
+    ContextTypes,
+    filters
+)
 BOT_TOKEN = os.environ['BOT_TOKEN']  # Важно: именно так, без get()
 TARGET_GROUP_ID = int(os.environ.get("TARGET_GROUP_ID", -1002807172405))
 TARGET_TOPIC_ID = int(os.environ.get("TARGET_TOPIC_ID")) if os.environ.get("73") else None
