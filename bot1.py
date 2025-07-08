@@ -3,10 +3,7 @@ from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 import logging
 import os
-
-# ===== НАСТРОЙКИ (теперь через переменные окружения) =====
-BOT_TOKEN = os.environ.get("7391635946:AAGEvQVQzQ7C8kgG-6dYE5XtYDghyKMFHnU")  # Получаем из Railway
-SOURCE_GROUP_ID = int(os.environ.get("SOURCE_GROUP_ID", -1001234567890))  # Дефолтное значение (если не задано)
+BOT_TOKEN = os.environ['BOT_TOKEN']  # Важно: именно так, без get()
 TARGET_GROUP_ID = int(os.environ.get("TARGET_GROUP_ID", -1002807172405))
 TARGET_TOPIC_ID = int(os.environ.get("TARGET_TOPIC_ID")) if os.environ.get("73") else None
 logging.basicConfig(
