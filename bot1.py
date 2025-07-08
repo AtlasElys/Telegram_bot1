@@ -1,7 +1,9 @@
-import os
-import logging
+from telegram.ext import ApplicationBuilder, Application
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
+import logging
+import os
+
 # ===== НАСТРОЙКИ (теперь через переменные окружения) =====
 BOT_TOKEN = os.environ.get("7391635946:AAGEvQVQzQ7C8kgG-6dYE5XtYDghyKMFHnU")  # Получаем из Railway
 SOURCE_GROUP_ID = int(os.environ.get("SOURCE_GROUP_ID", -1001234567890))  # Дефолтное значение (если не задано)
@@ -202,8 +204,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 # ===== ЗАПУСК БОТА =====
 def main() -> None:
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-    
+    application = Application.builder().token(BOT_TOKEN).build()  # Так тоже можно, но нужно соответствующие импорты
+
     # Обработчик тестов
     test_conv_handler = ConversationHandler(
         entry_points=[CommandHandler('test', start_test)],
