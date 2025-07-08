@@ -1,7 +1,7 @@
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, ConversationHandler
-
+import logging
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 # ===== НАСТРОЙКИ (теперь через переменные окружения) =====
 BOT_TOKEN = os.environ.get("7391635946:AAGEvQVQzQ7C8kgG-6dYE5XtYDghyKMFHnU")  # Получаем из Railway
 SOURCE_GROUP_ID = int(os.environ.get("SOURCE_GROUP_ID", -1001234567890))  # Дефолтное значение (если не задано)
