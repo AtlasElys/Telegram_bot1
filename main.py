@@ -396,6 +396,29 @@ async def show_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message, parse_mode="Markdown")
 
+# ===== ОТЛАДОЧНАЯ КОМАНДА =====
+async def debug_sessions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отладочная команда для просмотра активных сессий"""
+    user_id = update.effective_user.id
+    
+    active_sms = []
+    for k, v in sms_sessions.items():
+        if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
+            active_sms.append(k)
+    
+    active_tests = []
+    for k, v in test_sessions.items():
+        if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
+            active_tests.append(k)
+    
+    await update.message.reply_text(
+        f"🔍 Отладка:\n"
+        f"Активные SMS сессии: {active_sms}\n"
+        f"Активные тестовые сессии: {active_tests}\n"
+        f"Всего SMS сессий: {len(sms_sessions)}\n"
+        f"Всего тестовых сессий: {len(test_sessions)}"
+    )
+
 # ===== КОМАНДА /warn =====
 async def warn_workers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отправляет предупреждение во все целевые группы"""
@@ -1252,14 +1275,18 @@ async def handle_sms_screenshot(update: Update, context: ContextTypes.DEFAULT_TY
     """Обрабатывает скриншот от пользователя для SMS задания"""
     try:
         user_id = update.effective_user.id
+        
+        logger.info(f"Обработка SMS скриншота от пользователя {user_id}")
 
         sms_id = None
         for k, v in sms_sessions.items():
             if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
                 sms_id = k
+                logger.info(f"Найдена активная SMS сессия {sms_id}")
                 break
 
         if not sms_id:
+            logger.warning(f"Не найдена активная SMS сессия для пользователя {user_id}")
             return
 
         if update.message.photo:
@@ -1277,6 +1304,7 @@ async def handle_sms_screenshot(update: Update, context: ContextTypes.DEFAULT_TY
                             photo=photo.file_id,
                             caption=f"📱 Скриншот выполнения SMS задания от {sms_sessions[sms_id]['user_data']['mention']}\n{caption}" if caption else f"📱 Скриншот выполнения SMS задания от {sms_sessions[sms_id]['user_data']['mention']}"
                         )
+                        logger.info(f"Скриншот отправлен в исходную группу {source_id}")
                     except Exception as e:
                         logger.error(f"Ошибка отправки скриншота в исходную группу: {e}")
 
@@ -1292,6 +1320,8 @@ async def handle_sms_screenshot(update: Update, context: ContextTypes.DEFAULT_TY
                 caption=f"✅ SMS задание выполнено {sms_sessions[sms_id]['user_data']['mention']}!",
                 message_thread_id=target_group.get('topic_id') if target_group else None
             )
+            
+            logger.info(f"SMS задание {sms_id} успешно завершено")
 
     except Exception as e:
         logger.error(f"Ошибка в handle_sms_screenshot: {e}", exc_info=True)
@@ -1411,14 +1441,17 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обрабатывает скриншот и номер от пользователя для теста"""
     try:
         user_id = update.effective_user.id
+        logger.info(f"Обработка тестовых данных от пользователя {user_id}")
 
         test_id = None
         for k, v in test_sessions.items():
             if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
                 test_id = k
+                logger.info(f"Найдена активная тестовая сессия {test_id}")
                 break
 
         if not test_id:
+            logger.warning(f"Не найдена активная тестовая сессия для пользователя {user_id}")
             return
 
         test = test_sessions[test_id]
@@ -1426,6 +1459,7 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.message.photo:
             photo = update.message.photo[-1]
             test['user_data']['photo'] = photo.file_id
+            logger.info(f"Получено фото для теста {test_id}")
 
             caption = update.message.caption or ""
             match = re.search(r'\d{4}', caption)
@@ -1433,6 +1467,7 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if match:
                 four_digits = match.group()
                 test['user_data']['number'] = four_digits
+                logger.info(f"Найдены 4 цифры в подписи: {four_digits}")
 
                 keyboard = [
                     [InlineKeyboardButton("✅ Тест пройден", callback_data=f"test_passed_{test_id}")],
@@ -1455,6 +1490,7 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 ),
                                 reply_markup=InlineKeyboardMarkup(keyboard)
                             )
+                            logger.info(f"Данные теста отправлены в исходную группу {source_id}")
                         except Exception as e:
                             logger.error(f"Ошибка отправки в исходную группу: {e}")
 
@@ -1464,6 +1500,7 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif update.message.text and len(update.message.text) == 4 and update.message.text.isdigit():
             test['user_data']['number'] = update.message.text
+            logger.info(f"Получены 4 цифры отдельно: {update.message.text}")
 
             if not test['user_data']['photo']:
                 await update.message.reply_text("❌ Сначала отправьте скриншот!")
@@ -1490,6 +1527,7 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             ),
                             reply_markup=InlineKeyboardMarkup(keyboard)
                         )
+                        logger.info(f"Данные теста отправлены в исходную группу {source_id}")
                     except Exception as e:
                         logger.error(f"Ошибка отправки в исходную группу: {e}")
 
@@ -1585,36 +1623,50 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
     """Универсальный обработчик всех фото из рабочих чатов"""
     try:
         user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
         
+        # Добавляем логирование для отладки
+        logger.info(f"📸 Получено фото от пользователя {user_id} в чате {chat_id}")
+        
+        # Проверяем, является ли чат целевой группой
         is_target_group = any(
-            update.effective_chat.id == target['id'] 
+            chat_id == target['id'] 
             for target in config['target_groups']
         )
         
         if not is_target_group:
+            logger.info(f"Чат {chat_id} не является целевой группой, игнорируем фото")
             return
         
+        # Проверяем активные SMS сессии
         sms_id = None
         for k, v in sms_sessions.items():
             if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
                 sms_id = k
+                logger.info(f"Найдена активная SMS сессия {sms_id} для пользователя {user_id}")
                 break
         
+        # Проверяем активные тестовые сессии
         test_id = None
         for k, v in test_sessions.items():
             if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
                 test_id = k
+                logger.info(f"Найдена активная тестовая сессия {test_id} для пользователя {user_id}")
                 break
         
         if sms_id:
+            logger.info(f"Обрабатываем фото как SMS скриншот для сессии {sms_id}")
             await handle_sms_screenshot(update, context)
         elif test_id:
+            logger.info(f"Обрабатываем фото как тестовые данные для сессии {test_id}")
             await handle_test_data(update, context)
         else:
-            await update.message.reply_text("❌ У вас нет активных заданий")
+            logger.warning(f"Нет активных заданий для пользователя {user_id}")
+            await update.message.reply_text("❌ У вас нет активных заданий. Сначала нажмите кнопку 'Я выполню' под заданием.")
             
     except Exception as e:
         logger.error(f"Ошибка в handle_photo_message: {e}", exc_info=True)
+        await update.message.reply_text("❌ Произошла ошибка при обработке фото. Попробуйте еще раз.")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик ошибок"""
@@ -1706,27 +1758,39 @@ def main() -> None:
         allow_reentry=True,
     )
 
+    # ВАЖНО: Правильный порядок добавления обработчиков!
+    # Сначала команды
     application.add_handler(CommandHandler("id", show_id))
     application.add_handler(CommandHandler("warn", warn_workers))
-    application.add_handler(test_conv_handler)
-    application.add_handler(sms_conv_handler)
-    application.add_handler(settings_conv_handler)
+    application.add_handler(CommandHandler("debug", debug_sessions))
+    
+    # Затем обработчики колбэков (кнопок)
     application.add_handler(CallbackQueryHandler(start_test_execution, pattern="^do_test_"))
     application.add_handler(CallbackQueryHandler(start_sms_execution, pattern="^do_sms_"))
     application.add_handler(CallbackQueryHandler(handle_test_verification, pattern="^test_(passed|failed)_"))
-
+    
+    # Затем ConversationHandler'ы (они более специфичные)
+    application.add_handler(test_conv_handler)
+    application.add_handler(sms_conv_handler)
+    application.add_handler(settings_conv_handler)
+    
+    # Затем обработчики сообщений для целевых групп (самые специфичные)
     if config['target_groups']:
         target_group_ids = [t['id'] for t in config['target_groups']]
+        
+        # Сначала фото
         application.add_handler(MessageHandler(
             filters.Chat(chat_id=target_group_ids) & filters.PHOTO,
             handle_photo_message
         ))
-
+        
+        # Потом текст (кроме команд)
         application.add_handler(MessageHandler(
             filters.Chat(chat_id=target_group_ids) & filters.TEXT & ~filters.COMMAND,
             handle_test_data
         ))
 
+    # Добавляем обработчик ошибок последним
     application.add_error_handler(error_handler)
 
     logger.info("Бот запущен. Нажмите Ctrl+C для остановки.")
