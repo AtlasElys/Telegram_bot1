@@ -66,7 +66,7 @@ def check_single_instance():
                 if proc.info['name'] and 'python' in proc.info['name'].lower():
                     cmdline = proc.info.get('cmdline', [])
                     # Проверяем, есть ли в командной строке наш файл
-                    if cmdline and any('tesst.py' in arg for arg in cmdline):
+                    if cmdline and any('main.py' in arg for arg in cmdline):
                         print(f"❌ Бот уже запущен в процессе PID: {proc.info['pid']}")
                         print(f"Команда: {' '.join(cmdline)}")
                         return False
@@ -403,12 +403,12 @@ async def debug_sessions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     active_sms = []
     for k, v in sms_sessions.items():
-        if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
+        if v['status'] == 'in_progress' and v['user_data'] and v['user_data'].get('id') == user_id:
             active_sms.append(k)
     
     active_tests = []
     for k, v in test_sessions.items():
-        if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
+        if v['status'] == 'in_progress' and v['user_data'] and v['user_data'].get('id') == user_id:
             active_tests.append(k)
     
     await update.message.reply_text(
@@ -1232,18 +1232,34 @@ async def start_sms_execution(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     sms_id = int(query.data.split('_')[-1])
-    if sms_id not in sms_sessions or sms_sessions[sms_id]['status'] != 'active':
+    
+    # Добавим подробное логирование
+    logger.info(f"🔄 Нажата кнопка SMS выполнения. ID: {sms_id}")
+    logger.info(f"Текущие SMS сессии: {list(sms_sessions.keys())}")
+    
+    if sms_id not in sms_sessions:
+        logger.error(f"SMS сессия {sms_id} не найдена!")
+        await query.answer("⚠ SMS задание не найдено", show_alert=True)
+        return
+        
+    if sms_sessions[sms_id]['status'] != 'active':
+        logger.warning(f"SMS сессия {sms_id} уже не активна. Статус: {sms_sessions[sms_id]['status']}")
         await query.answer("⚠ Это SMS задание уже взято", show_alert=True)
         return
 
     user = query.from_user
     user_mention = f"@{user.username}" if user.username else user.first_name
 
+    # Сохраняем данные пользователя
     sms_sessions[sms_id]['status'] = 'in_progress'
     sms_sessions[sms_id]['user_data'] = {
         'id': user.id,
-        'mention': user_mention
+        'mention': user_mention,
+        'username': user.username,
+        'first_name': user.first_name
     }
+    
+    logger.info(f"✅ SMS сессия {sms_id} обновлена. Статус: in_progress, user_id: {user.id}")
 
     update_user_stats(user.id, user.username or '', user.first_name or '', 'sms', 'take')
 
@@ -1280,13 +1296,14 @@ async def handle_sms_screenshot(update: Update, context: ContextTypes.DEFAULT_TY
 
         sms_id = None
         for k, v in sms_sessions.items():
-            if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
+            if v['status'] == 'in_progress' and v.get('user_data') and v['user_data'].get('id') == user_id:
                 sms_id = k
-                logger.info(f"Найдена активная SMS сессия {sms_id}")
+                logger.info(f"Найдена активная SMS сессия {sms_id} для пользователя {user_id}")
                 break
 
         if not sms_id:
             logger.warning(f"Не найдена активная SMS сессия для пользователя {user_id}")
+            await update.message.reply_text("❌ У вас нет активных SMS заданий. Сначала нажмите кнопку 'Я выполню'.")
             return
 
         if update.message.photo:
@@ -1396,7 +1413,16 @@ async def start_test_execution(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
 
     test_id = int(query.data.split('_')[-1])
-    if test_id not in test_sessions or test_sessions[test_id]['status'] != 'active':
+    
+    logger.info(f"🔄 Нажата кнопка тестового выполнения. ID: {test_id}")
+    
+    if test_id not in test_sessions:
+        logger.error(f"Тестовая сессия {test_id} не найдена!")
+        await query.answer("⚠ Тест не найден", show_alert=True)
+        return
+        
+    if test_sessions[test_id]['status'] != 'active':
+        logger.warning(f"Тестовая сессия {test_id} уже не активна. Статус: {test_sessions[test_id]['status']}")
         await query.answer("⚠ Этот тест уже завершен", show_alert=True)
         return
 
@@ -1407,9 +1433,13 @@ async def start_test_execution(update: Update, context: ContextTypes.DEFAULT_TYP
     test_sessions[test_id]['user_data'] = {
         'id': user.id,
         'mention': user_mention,
+        'username': user.username,
+        'first_name': user.first_name,
         'photo': None,
         'number': None
     }
+    
+    logger.info(f"✅ Тестовая сессия {test_id} обновлена. Статус: in_progress, user_id: {user.id}")
 
     update_user_stats(user.id, user.username or '', user.first_name or '', 'test', 'take')
 
@@ -1445,13 +1475,14 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         test_id = None
         for k, v in test_sessions.items():
-            if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
+            if v['status'] == 'in_progress' and v.get('user_data') and v['user_data'].get('id') == user_id:
                 test_id = k
-                logger.info(f"Найдена активная тестовая сессия {test_id}")
+                logger.info(f"Найдена активная тестовая сессия {test_id} для пользователя {user_id}")
                 break
 
         if not test_id:
             logger.warning(f"Не найдена активная тестовая сессия для пользователя {user_id}")
+            await update.message.reply_text("❌ У вас нет активных тестовых заданий. Сначала нажмите кнопку 'Я выполню'.")
             return
 
         test = test_sessions[test_id]
@@ -1502,7 +1533,7 @@ async def handle_test_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             test['user_data']['number'] = update.message.text
             logger.info(f"Получены 4 цифры отдельно: {update.message.text}")
 
-            if not test['user_data']['photo']:
+            if not test['user_data'].get('photo'):
                 await update.message.reply_text("❌ Сначала отправьте скриншот!")
                 return
 
@@ -1625,8 +1656,10 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
         
-        # Добавляем логирование для отладки
+        # Добавляем подробное логирование для отладки
         logger.info(f"📸 Получено фото от пользователя {user_id} в чате {chat_id}")
+        logger.info(f"Всего SMS сессий: {len(sms_sessions)}")
+        logger.info(f"Всего тестовых сессий: {len(test_sessions)}")
         
         # Проверяем, является ли чат целевой группой
         is_target_group = any(
@@ -1638,34 +1671,58 @@ async def handle_photo_message(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.info(f"Чат {chat_id} не является целевой группой, игнорируем фото")
             return
         
-        # Проверяем активные SMS сессии
+        # ПРОВЕРКА АКТИВНЫХ SMS СЕССИЙ - ИСПРАВЛЕНО
         sms_id = None
         for k, v in sms_sessions.items():
-            if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
-                sms_id = k
-                logger.info(f"Найдена активная SMS сессия {sms_id} для пользователя {user_id}")
-                break
+            # Проверяем, что сессия активна и содержит user_data
+            if v['status'] == 'in_progress' and v.get('user_data'):
+                # Проверяем, что user_data содержит id и он совпадает с текущим пользователем
+                if v['user_data'].get('id') == user_id:
+                    sms_id = k
+                    logger.info(f"✅ Найдена активная SMS сессия {sms_id} для пользователя {user_id}")
+                    logger.info(f"Данные SMS сессии: {v}")
+                    break
         
-        # Проверяем активные тестовые сессии
+        # ПРОВЕРКА АКТИВНЫХ ТЕСТОВЫХ СЕССИЙ - ИСПРАВЛЕНО
         test_id = None
-        for k, v in test_sessions.items():
-            if v['status'] == 'in_progress' and v['user_data'] and v['user_data']['id'] == user_id:
-                test_id = k
-                logger.info(f"Найдена активная тестовая сессия {test_id} для пользователя {user_id}")
-                break
+        if not sms_id:  # Ищем тестовую сессию только если не нашли SMS
+            for k, v in test_sessions.items():
+                # Проверяем, что сессия активна и содержит user_data
+                if v['status'] == 'in_progress' and v.get('user_data'):
+                    # Проверяем, что user_data содержит id и он совпадает с текущим пользователем
+                    if v['user_data'].get('id') == user_id:
+                        test_id = k
+                        logger.info(f"✅ Найдена активная тестовая сессия {test_id} для пользователя {user_id}")
+                        logger.info(f"Данные тестовой сессии: {v}")
+                        break
         
         if sms_id:
-            logger.info(f"Обрабатываем фото как SMS скриншот для сессии {sms_id}")
+            logger.info(f"📤 Обрабатываем фото как SMS скриншот для сессии {sms_id}")
             await handle_sms_screenshot(update, context)
         elif test_id:
-            logger.info(f"Обрабатываем фото как тестовые данные для сессии {test_id}")
+            logger.info(f"📤 Обрабатываем фото как тестовые данные для сессии {test_id}")
             await handle_test_data(update, context)
         else:
-            logger.warning(f"Нет активных заданий для пользователя {user_id}")
-            await update.message.reply_text("❌ У вас нет активных заданий. Сначала нажмите кнопку 'Я выполню' под заданием.")
+            logger.warning(f"❌ Нет активных заданий для пользователя {user_id}")
+            # Проверим все сессии для отладки
+            logger.info("Активные SMS сессии:")
+            for k, v in sms_sessions.items():
+                if v['status'] == 'in_progress':
+                    logger.info(f"  SMS {k}: user_data={v.get('user_data')}")
+            
+            logger.info("Активные тестовые сессии:")
+            for k, v in test_sessions.items():
+                if v['status'] == 'in_progress':
+                    logger.info(f"  Тест {k}: user_data={v.get('user_data')}")
+            
+            await update.message.reply_text(
+                "❌ У вас нет активных заданий.\n"
+                "Сначала нажмите кнопку 'Я выполню' под заданием, "
+                "а затем отправляйте скриншот."
+            )
             
     except Exception as e:
-        logger.error(f"Ошибка в handle_photo_message: {e}", exc_info=True)
+        logger.error(f"❌ Ошибка в handle_photo_message: {e}", exc_info=True)
         await update.message.reply_text("❌ Произошла ошибка при обработке фото. Попробуйте еще раз.")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
