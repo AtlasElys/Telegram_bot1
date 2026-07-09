@@ -21,9 +21,6 @@ from telegram.ext import (
 TOKEN = "8580365803:AAGki0GmDR6bGPk8fzcwVy3NMh6IrgsCvb8"
 OWNER_ID = 191402414
 
-# Premium эмодзи ID
-OWNER_EMOJI_ID = "5443038326535759644"  # эмодзи владельца
-
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -56,23 +53,15 @@ def ask_buttons(chat_id, msg_id):
         InlineKeyboardButton("❌ Нет", callback_data=f"{DECLINE}:{chat_id}:{msg_id}"),
     ]])
 
-def sign(text):
-    """Подпись с Premium-эмодзи и жирным текстом"""
-    signature = (
-        f'\n\n<tg-emoji emoji-id="{OWNER_EMOJI_ID}">👤</tg-emoji> '
-        f'<b>Владелец — @EclipsOwner</b>'
-    )
-    return (text or "") + signature
-
 async def start(update, context):
     await update.message.reply_text(
-        "<b>🤖 Бот работает</b>\n\n"
+        "<b>Бот работает</b>\n\n"
         "<b>Команды:</b>\n"
-        "/set_favorite ID — установить избранный канал\n"
-        "/add ID — добавить канал в сеть\n"
-        "/remove ID — удалить канал\n"
-        "/list — список каналов\n"
-        "/check ID — проверить доступ",
+        "/set_favorite ID\n"
+        "/add ID\n"
+        "/remove ID\n"
+        "/list\n"
+        "/check ID",
         parse_mode=ParseMode.HTML,
     )
 
@@ -80,70 +69,67 @@ async def check_channel(update, context):
     if update.effective_user.id != OWNER_ID:
         return
     if not context.args:
-        await update.message.reply_text("<b>❌ Укажи ID:</b> /check -1001234567890", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("/check -1001234567890")
         return
     try:
         chat = await context.bot.get_chat(int(context.args[0]))
         member = await context.bot.get_chat_member(chat.id, context.bot.id)
-        await update.message.reply_text(
-            f"<b>✅ {chat.title}</b>\nID: <code>{chat.id}</code>\nСтатус: {member.status}",
-            parse_mode=ParseMode.HTML,
-        )
+        await update.message.reply_text(f"OK {chat.title} ID {chat.id} Status {member.status}")
     except Exception as e:
-        await update.message.reply_text(f"<b>❌ Ошибка:</b> {e}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"Error {e}")
 
 async def add_channel(update, context):
     if update.effective_user.id != OWNER_ID:
         return
     if not context.args:
-        await update.message.reply_text("<b>❌ Укажи ID:</b> /add -1001234567890", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("/add -1001234567890")
         return
     ch_id = int(context.args[0])
     data = load_data()
     if ch_id in data["network_channels"]:
-        await update.message.reply_text("<b>⚠️ Уже в сети</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("Already added")
         return
     try:
         chat = await context.bot.get_chat(ch_id)
         data["network_channels"].append(ch_id)
         save_data(data)
-        await update.message.reply_text(f"<b>✅ Добавлен: {chat.title}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"Added {chat.title}")
     except Exception as e:
-        await update.message.reply_text(f"<b>❌ Ошибка:</b> {e}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"Error {e}")
 
 async def remove_channel(update, context):
     if update.effective_user.id != OWNER_ID:
         return
     if not context.args:
-        await update.message.reply_text("<b>❌ Укажи ID:</b> /remove -1001234567890", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("/remove -1001234567890")
         return
     ch_id = int(context.args[0])
     data = load_data()
     if ch_id in data["network_channels"]:
         data["network_channels"].remove(ch_id)
         save_data(data)
-        await update.message.reply_text(f"<b>✅ Удалён: {ch_id}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"Removed {ch_id}")
     else:
-        await update.message.reply_text("<b>❌ Не найден</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("Not found")
 
 async def list_channels(update, context):
     data = load_data()
     fav = data.get("favorite_channel")
     net = data.get("network_channels", [])
-    text = f"<b>🌟 Избранный:</b> {fav or 'нет'}\n\n<b>📢 Сеть ({len(net)}):</b>\n"
+    text = f"Favorite: {fav or 'none'}\n\nNetwork ({len(net)}):\n"
     for ch in net:
         try:
             chat = await context.bot.get_chat(ch)
-            text += f"• {chat.title}\n"
+            text += f"- {chat.title}\n"
         except:
-            text += f"• {ch}\n"
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+            text += f"- {ch}\n"
+    await update.message.reply_text(text)
 
 async def set_favorite(update, context):
     if update.effective_user.id != OWNER_ID:
         return
     if not context.args:
-        await update.message.reply_text("<b>❌ Укажи ID:</b> /set_favorite -1001234567890", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("/set_favorite -1001234567890")
         return
     ch_id = int(context.args[0])
     data = load_data()
@@ -151,9 +137,9 @@ async def set_favorite(update, context):
         chat = await context.bot.get_chat(ch_id)
         data["favorite_channel"] = ch_id
         save_data(data)
-        await update.message.reply_text(f"<b>✅ Избранный: {chat.title}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"Favorite set {chat.title}")
     except Exception as e:
-        await update.message.reply_text(f"<b>❌ Ошибка:</b> {e}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"Error {e}")
 
 async def on_post(update, context):
     msg = update.channel_post
@@ -166,62 +152,51 @@ async def on_post(update, context):
     if msg.chat_id != fav:
         return
     
-    logger.info(f"📨 Пост #{msg.message_id}")
+    logger.info(f"Post #{msg.message_id}")
     
-    # Получаем оригинальный текст
-    original_text = msg.text or msg.caption or ""
+    # Сохраняем оригинальные entities (Premium-эмодзи внутри них)
+    original_entities = msg.entities or msg.caption_entities or []
     
-    # Добавляем подпись с Premium-эмодзи
-    new_text = sign(original_text)
+    # Текст подписи
+    signature_text = "\n\n👤 Владелец — @EclipsOwner"
+    
+    # Новый текст
+    new_text = (msg.text or msg.caption or "") + signature_text
+    
     btns = post_buttons()
     
     try:
         if msg.text:
             await msg.edit_text(
-                new_text,
+                text=new_text,
                 reply_markup=btns,
-                parse_mode=ParseMode.HTML,
+                entities=original_entities,
             )
         elif msg.caption or msg.photo or msg.video or msg.document or msg.audio or msg.animation or msg.voice:
             await msg.edit_caption(
                 caption=new_text,
                 reply_markup=btns,
-                parse_mode=ParseMode.HTML,
+                caption_entities=original_entities,
             )
         else:
             await msg.edit_text(
-                new_text,
+                text=new_text,
                 reply_markup=btns,
-                parse_mode=ParseMode.HTML,
             )
         
-        logger.info("✅ Отредактирован")
+        logger.info("Edited")
     except Exception as e:
-        logger.error(f"❌ Ошибка редактирования: {e}")
-        # Если не получилось отредактировать — пробуем удалить и создать заново
-        try:
-            temp = await msg.copy(chat_id=fav)
-            await msg.delete()
-            if temp.text:
-                await temp.edit_text(new_text, reply_markup=btns, parse_mode=ParseMode.HTML)
-            else:
-                await temp.edit_caption(caption=new_text, reply_markup=btns, parse_mode=ParseMode.HTML)
-            msg = temp
-            logger.info("✅ Пересоздан")
-        except Exception as e2:
-            logger.error(f"❌ Полная ошибка: {e2}")
-            return
+        logger.error(f"Error: {e}")
+        return
     
-    # Отправляем запрос владельцу
     try:
         await context.bot.send_message(
             OWNER_ID,
-            "<b>📢 Опубликовать пост во все каналы?</b>",
+            "Publish to all channels?",
             reply_markup=ask_buttons(msg.chat_id, msg.message_id),
-            parse_mode=ParseMode.HTML,
         )
     except Exception as e:
-        logger.error(f"❌ Ошибка: {e}")
+        logger.error(f"Error: {e}")
 
 async def on_approve(update, context):
     q = update.callback_query
@@ -233,42 +208,33 @@ async def on_approve(update, context):
     msg_id = int(parts[2]) if len(parts) > 2 else 0
     
     if action == DECLINE:
-        await q.edit_message_text("<b>❌ Публикация отменена</b>", parse_mode=ParseMode.HTML)
+        await q.edit_message_text("Cancel")
         return
     
-    await q.edit_message_text("<b>⏳ Публикую...</b>", parse_mode=ParseMode.HTML)
+    await q.edit_message_text("Publishing...")
     
     data = load_data()
     net = data.get("network_channels", [])
     
     if not net:
-        await q.message.reply_text("<b>⚠️ Сеть каналов пуста</b>", parse_mode=ParseMode.HTML)
+        await q.message.reply_text("Network empty")
         return
     
     ok = 0
-    failed = []
-    
     for ch in net:
         try:
             await context.bot.copy_message(
                 chat_id=ch,
                 from_chat_id=chat_id,
                 message_id=msg_id,
-                reply_markup=post_buttons(),  # Кнопки при копировании
+                reply_markup=post_buttons(),
             )
             ok += 1
             await asyncio.sleep(0.5)
         except Exception as e:
-            logger.error(f"❌ {ch}: {e}")
-            failed.append(ch)
+            logger.error(f"Error {ch}: {e}")
     
-    report = f"<b>✅ Готово!</b>\n📊 Опубликовано: {ok}/{len(net)}"
-    if failed:
-        report += "\n\n<b>❌ Ошибки в каналах:</b>\n"
-        for ch in failed:
-            report += f"• <code>{ch}</code>\n"
-    
-    await q.message.reply_text(report, parse_mode=ParseMode.HTML)
+    await q.message.reply_text(f"Done {ok}/{len(net)}")
 
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -282,7 +248,7 @@ def main():
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, on_post))
     app.add_handler(CallbackQueryHandler(on_approve, pattern=f"^({APPROVE}|{DECLINE}):"))
     
-    logger.info("🚀 Бот запущен!")
+    logger.info("Bot started!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
