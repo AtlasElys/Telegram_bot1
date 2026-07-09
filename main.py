@@ -21,6 +21,9 @@ from telegram.ext import (
 TOKEN = "8580365803:AAGki0GmDR6bGPk8fzcwVy3NMh6IrgsCvb8"
 OWNER_ID = 191402414
 
+# Premium эмодзи ID
+OWNER_EMOJI_ID = "5443038326535759644"  # эмодзи владельца
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -43,8 +46,8 @@ DECLINE = "no"
 
 def post_buttons():
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Бот", url="https://t.me/EclipsShopsBot"),
-        InlineKeyboardButton("Переходник", url="https://t.me/EclipsMod"),
+        InlineKeyboardButton("🦋 Бот", url="https://t.me/EclipsShopsBot"),
+        InlineKeyboardButton("🦋 Переходник", url="https://t.me/EclipsMod"),
     ]])
 
 def ask_buttons(chat_id, msg_id):
@@ -54,10 +57,12 @@ def ask_buttons(chat_id, msg_id):
     ]])
 
 def sign(text):
-    if text:
-        return text + "\n\n<b>👤 Владелец — @EclipsOwner</b>"
-    else:
-        return "<b>👤 Владелец — @EclipsOwner</b>"
+    """Подпись с Premium-эмодзи и жирным текстом"""
+    signature = (
+        f'\n\n<tg-emoji emoji-id="{OWNER_EMOJI_ID}">👤</tg-emoji> '
+        f'<b>Владелец — @EclipsOwner</b>'
+    )
+    return (text or "") + signature
 
 async def start(update, context):
     await update.message.reply_text(
@@ -163,28 +168,37 @@ async def on_post(update, context):
     
     logger.info(f"📨 Пост #{msg.message_id}")
     
-    # Берём текст или caption (для медиа)
+    # Получаем оригинальный текст
     original_text = msg.text or msg.caption or ""
+    
+    # Добавляем подпись с Premium-эмодзи
     new_text = sign(original_text)
     btns = post_buttons()
     
     try:
-        # Пробуем редактировать
         if msg.text:
-            await msg.edit_text(new_text, reply_markup=btns, parse_mode=ParseMode.HTML)
-        elif msg.caption:
-            await msg.edit_caption(caption=new_text, reply_markup=btns, parse_mode=ParseMode.HTML)
-        elif msg.photo or msg.video or msg.document or msg.audio or msg.voice or msg.animation or msg.sticker:
-            # Медиа без подписи — добавляем подпись
-            await msg.edit_caption(caption=new_text, reply_markup=btns, parse_mode=ParseMode.HTML)
+            await msg.edit_text(
+                new_text,
+                reply_markup=btns,
+                parse_mode=ParseMode.HTML,
+            )
+        elif msg.caption or msg.photo or msg.video or msg.document or msg.audio or msg.animation or msg.voice:
+            await msg.edit_caption(
+                caption=new_text,
+                reply_markup=btns,
+                parse_mode=ParseMode.HTML,
+            )
         else:
-            # Если совсем без медиа и текста — редактируем как текст
-            await msg.edit_text(new_text, reply_markup=btns, parse_mode=ParseMode.HTML)
+            await msg.edit_text(
+                new_text,
+                reply_markup=btns,
+                parse_mode=ParseMode.HTML,
+            )
         
         logger.info("✅ Отредактирован")
     except Exception as e:
-        logger.error(f"❌ Ошибка: {e}")
-        # Если не вышло — удаляем и создаём новый
+        logger.error(f"❌ Ошибка редактирования: {e}")
+        # Если не получилось отредактировать — пробуем удалить и создать заново
         try:
             temp = await msg.copy(chat_id=fav)
             await msg.delete()
@@ -232,24 +246,30 @@ async def on_approve(update, context):
         return
     
     ok = 0
+    failed = []
+    
     for ch in net:
         try:
             await context.bot.copy_message(
                 chat_id=ch,
                 from_chat_id=chat_id,
                 message_id=msg_id,
-                reply_markup=post_buttons(),  # ← ВОТ ЭТО ДОБАВИЛ
+                reply_markup=post_buttons(),  # Кнопки при копировании
             )
             ok += 1
             await asyncio.sleep(0.5)
         except Exception as e:
             logger.error(f"❌ {ch}: {e}")
+            failed.append(ch)
     
-    await q.message.reply_text(
-        f"<b>✅ Готово!</b>\n📊 Опубликовано: {ok}/{len(net)}",
-        parse_mode=ParseMode.HTML,
-    )
+    report = f"<b>✅ Готово!</b>\n📊 Опубликовано: {ok}/{len(net)}"
+    if failed:
+        report += "\n\n<b>❌ Ошибки в каналах:</b>\n"
+        for ch in failed:
+            report += f"• <code>{ch}</code>\n"
     
+    await q.message.reply_text(report, parse_mode=ParseMode.HTML)
+
 def main():
     app = Application.builder().token(TOKEN).build()
     
